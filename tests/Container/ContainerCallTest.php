@@ -3,18 +3,18 @@
 namespace Illuminate\Tests\Container;
 
 use Closure;
+use Error;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use PHPUnit\Framework\TestCase;
-use ReflectionException;
 use stdClass;
 
 class ContainerCallTest extends TestCase
 {
     public function testCallWithAtSignBasedClassReferencesWithoutMethodThrowsException()
     {
-        $this->expectException(ReflectionException::class);
-        $this->expectExceptionMessage('Function ContainerTestCallStub() does not exist');
+        $this->expectException(Error::class);
+        $this->expectExceptionMessage('Call to undefined function ContainerTestCallStub()');
 
         $container = new Container;
         $container->call('ContainerTestCallStub');
@@ -193,7 +193,7 @@ class ContainerCallTest extends TestCase
         $this->expectExceptionMessage('Unable to resolve dependency [Parameter #0 [ <required> $foo ]] in class Illuminate\Tests\Container\ContainerCallTest');
 
         $container = new Container;
-        $foo = $container->call(function ($foo, $bar = 'default') {
+        $container->call(function ($foo, $bar = 'default') {
             return $foo;
         });
     }

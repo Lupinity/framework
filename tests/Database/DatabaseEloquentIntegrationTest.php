@@ -352,7 +352,7 @@ class DatabaseEloquentIntegrationTest extends TestCase
         );
 
         $this->assertSame('Mohamed Said', $user3->name);
-        $this->assertEquals(EloquentTestUser::count(), 2);
+        $this->assertEquals(2, EloquentTestUser::count());
     }
 
     public function testUpdateOrCreateOnDifferentConnection()
@@ -369,8 +369,8 @@ class DatabaseEloquentIntegrationTest extends TestCase
             ['name' => 'Mohamed Said']
         );
 
-        $this->assertEquals(EloquentTestUser::count(), 1);
-        $this->assertEquals(EloquentTestUser::on('second_connection')->count(), 2);
+        $this->assertEquals(1, EloquentTestUser::count());
+        $this->assertEquals(2, EloquentTestUser::on('second_connection')->count());
     }
 
     public function testCheckAndCreateMethodsOnMultiConnections()
@@ -1220,8 +1220,8 @@ class DatabaseEloquentIntegrationTest extends TestCase
         $defaultConnectionPost = EloquentTestPhoto::with('imageable')->first()->imageable;
         $secondConnectionPost = EloquentTestPhoto::on('second_connection')->with('imageable')->first()->imageable;
 
-        $this->assertEquals($defaultConnectionPost->name, 'Default Connection Post');
-        $this->assertEquals($secondConnectionPost->name, 'Second Connection Post');
+        $this->assertSame('Default Connection Post', $defaultConnectionPost->name);
+        $this->assertSame('Second Connection Post', $secondConnectionPost->name);
     }
 
     public function testBelongsToManyCustomPivot()
@@ -1340,10 +1340,15 @@ class DatabaseEloquentIntegrationTest extends TestCase
         EloquentTestUser::find(1)->update(['name' => 'Mathieu TUDISCO']);
         EloquentTestUser::find(2)->update(['email' => 'dev@mathieutu.ovh']);
 
-        $this->assertEquals($users->map->fresh(), $users->fresh());
+        $this->assertCount(3, $users);
+        $this->assertNotEquals('Mathieu TUDISCO', $users[0]->name);
+        $this->assertNotEquals('dev@mathieutu.ovh', $users[1]->email);
 
-        $users = new Collection;
-        $this->assertEquals($users->map->fresh(), $users->fresh());
+        $refreshedUsers = $users->fresh();
+
+        $this->assertCount(2, $refreshedUsers);
+        $this->assertEquals('Mathieu TUDISCO', $refreshedUsers[0]->name);
+        $this->assertEquals('dev@mathieutu.ovh', $refreshedUsers[1]->email);
     }
 
     public function testTimestampsUsingDefaultDateFormat()

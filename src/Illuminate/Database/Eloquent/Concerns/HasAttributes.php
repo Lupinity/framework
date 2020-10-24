@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as BaseCollection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -58,7 +59,7 @@ trait HasAttributes
     /**
      * The built-in, primitive cast types supported by Eloquent.
      *
-     * @var array
+     * @var string[]
      */
     protected static $primitiveCastTypes = [
         'array',
@@ -70,6 +71,7 @@ trait HasAttributes
         'datetime',
         'decimal',
         'double',
+        'encrypted',
         'float',
         'int',
         'integer',
@@ -238,6 +240,10 @@ trait HasAttributes
             if ($attributes[$key] && $attributes[$key] instanceof DateTimeInterface &&
                 $this->isClassCastable($key)) {
                 $attributes[$key] = $this->serializeDate($attributes[$key]);
+            }
+
+            if ($attributes[$key] && $this->isClassSerializable($key)) {
+                $attributes[$key] = $this->serializeClassCastableAttribute($key, $attributes[$key]);
             }
 
             if ($attributes[$key] instanceof Arrayable) {
@@ -548,6 +554,8 @@ trait HasAttributes
                 return $this->asDateTime($value);
             case 'timestamp':
                 return $this->asTimestamp($value);
+            case 'encrypted':
+                return $this->fromEncryptedString($value);
         }
 
         if ($this->isClassCastable($key)) {
@@ -605,6 +613,20 @@ trait HasAttributes
     }
 
     /**
+     * Serialize the given attribute using the custom cast class.
+     *
+     * @param  string  $key
+     * @param  mixed  $value
+     * @return mixed
+     */
+    protected function serializeClassCastableAttribute($key, $value)
+    {
+        return $this->resolveCasterClass($key)->serialize(
+            $this, $key, $value, $this->attributes
+        );
+    }
+
+    /**
      * Determine if the cast type is a custom date time cast.
      *
      * @param  string  $cast
@@ -656,7 +678,7 @@ trait HasAttributes
             return $this;
         }
 
-        if ($this->isJsonCastable($key) && ! is_null($value)) {
+        if (! is_null($value) && $this->isJsonCastable($key)) {
             $value = $this->castAttributeAsJson($key, $value);
         }
 
@@ -665,6 +687,10 @@ trait HasAttributes
         // attribute in the array's value in the case of deeply nested items.
         if (Str::contains($key, '->')) {
             return $this->fillJsonAttribute($key, $value);
+        }
+
+        if (! is_null($value) && $this->isEncryptedCastable($key)) {
+            $value = $this->castAttributeAsEncryptedString($key, $value);
         }
 
         $this->attributes[$key] = $value;
@@ -828,6 +854,30 @@ trait HasAttributes
     public function fromJson($value, $asObject = false)
     {
         return json_decode($value, ! $asObject);
+    }
+
+    /**
+     * Decode the given encrypted string.
+     *
+     * @param  string  $value
+     * @param  bool  $asObject
+     * @return mixed
+     */
+    public function fromEncryptedString($value)
+    {
+        return Crypt::decryptString($value);
+    }
+
+    /**
+     * Cast the given attribute to an encrypted string.
+     *
+     * @param  string  $key
+     * @param  mixed  $value
+     * @return string
+     */
+    protected function castAttributeAsEncryptedString($key, $value)
+    {
+        return Crypt::encryptString($value);
     }
 
     /**
@@ -1066,6 +1116,17 @@ trait HasAttributes
     }
 
     /**
+     * Determine whether a value is an encrypted castable for inbound manipulation.
+     *
+     * @param  string  $key
+     * @return bool
+     */
+    protected function isEncryptedCastable($key)
+    {
+        return $this->hasCast($key, ['encrypted']);
+    }
+
+    /**
      * Determine if the given key is cast using a custom class.
      *
      * @param  string  $key
@@ -1088,6 +1149,20 @@ trait HasAttributes
         }
 
         throw new InvalidCastException($this->getModel(), $key, $castType);
+    }
+
+    /**
+     * Determine if the key is serializable using a custom class.
+     *
+     * @param  string  $key
+     * @return bool
+     *
+     * @throws \Illuminate\Database\Eloquent\InvalidCastException
+     */
+    protected function isClassSerializable($key)
+    {
+        return $this->isClassCastable($key) &&
+               method_exists($this->parseCasterClass($this->getCasts()[$key]), 'serialize');
     }
 
     /**
